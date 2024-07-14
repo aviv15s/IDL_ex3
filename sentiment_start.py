@@ -8,6 +8,7 @@
 
 import torch as tr
 import torch
+from matplotlib import pyplot as plt
 from torch.nn.functional import pad
 import torch.nn as nn
 import numpy as np
@@ -18,7 +19,7 @@ batch_size = 32
 output_size = 2
 hidden_size = 64        # to experiment with
 
-run_recurrent = False    # else run Token-wise MLP
+run_recurrent = True    # else run Token-wise MLP
 use_RNN = True          # otherwise GRU
 atten_size = 0          # atten > 0 means using restricted self atten
 
@@ -68,9 +69,8 @@ class ExRNN(nn.Module):
         return "RNN"
 
     def forward(self, x, hidden_state):
-
         # Implementation of RNN cell
-        combined = torch.cat(x, hidden_state) # TODO check correct cat
+        combined = torch.cat((x, hidden_state),1)
         h = self.sigmoid(self.in2hidden(combined))
         y = self.sigmoid(self.in2output(h))
         return y, h
@@ -100,11 +100,12 @@ class ExGRU(nn.Module):
     def forward(self, x, hidden_state):
 
         # Implementation of GRU cell
+        combined = torch.cat((x, hidden_state),1)  # TODO check correct cat
 
-        z = self.sigmoid(self.z_weights(torch.cat(hidden_state, x)))
-        r = self.sigmoid(self.r_weights(torch.cat(hidden_state, x)))
+        z = self.sigmoid(self.z_weights(torch.cat((hidden_state, x),1)))
+        r = self.sigmoid(self.r_weights(torch.cat((hidden_state, x),1)))
 
-        h_bar = self.tanh(self.weights(torch.cat(r*hidden_state, x)))
+        h_bar = self.tanh(self.weights(torch.cat((r*hidden_state, x),1)))
         h = (1-z)*hidden_state + z*h_bar
 
         return h
@@ -189,11 +190,11 @@ class ExRestSelfAtten(nn.Module):
         return x, atten_weights
 
 
-# prints portion of the review (20-30 first words), with the sub-scores each work obtained
+# prints portion of the review (20-30 first words), with the sub-scores each word obtained
 # prints also the final scores, the softmaxed prediction values and the true label values
 
 def print_review(rev_text, sbs1, sbs2, lbl1, lbl2):
-            
+    pass
     # implement
 
 # select model to use
@@ -222,10 +223,10 @@ train_loss = 1.0
 test_loss = 1.0
 
 # training steps in which a test step is executed every test_interval
+train_accuracy, test_accuracy = [], []
 
 for epoch in range(num_epochs):
-
-    itr = 0 # iteration counter within each epoch
+    itr = 0  # iteration counter within each epoch
 
     for labels, reviews, reviews_text in train_dataset:   # getting training batches
 
@@ -260,8 +261,12 @@ for epoch in range(num_epochs):
             output = torch.mean(sub_score, 1)
             
         # cross-entropy loss
-
         loss = criterion(output, labels)
+
+        if test_iter:
+            test_accuracy.append((torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float().sum() / batch_size)
+        else:
+            train_accuracy.append((torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float().sum() / batch_size)
 
         # optimize in training iterations
 
@@ -281,7 +286,7 @@ for epoch in range(num_epochs):
                 f"Epoch [{epoch + 1}/{num_epochs}], "
                 f"Step [{itr + 1}/{len(train_dataset)}], "
                 f"Train Loss: {train_loss:.4f}, "
-                f"Test Loss: {test_loss:.4f}"
+                f"Test Loss: {test_loss:.4f},"
             )
 
             if not run_recurrent:
@@ -291,3 +296,13 @@ for epoch in range(num_epochs):
 
             # saving the model
             torch.save(model, model.name() + ".pth")
+
+
+print(len(train_accuracy), len(test_accuracy))
+plt.plot(list(np.linspace(0, num_epochs, len(train_accuracy))), train_accuracy, label=f'train accuracy')
+plt.plot(list(np.linspace(0, num_epochs, len(test_accuracy))), test_accuracy, label=f'test accuracy')
+plt.xlabel("# epochs")
+plt.title(f"Train and Test accuracy per iteration")
+plt.grid(True)
+plt.legend()
+plt.show()
