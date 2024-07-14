@@ -60,7 +60,9 @@ class ExRNN(nn.Module):
 
         # RNN Cell weights
         self.in2hidden = nn.Linear(input_size + hidden_size, hidden_size)
+
         # what else?
+        self.in2output = nn.Linear(hidden_size, output_size)
 
     def name(self):
         return "RNN"
@@ -68,8 +70,10 @@ class ExRNN(nn.Module):
     def forward(self, x, hidden_state):
 
         # Implementation of RNN cell
-        
-        return output, hidden
+        combined = torch.cat(x, hidden_state) # TODO check correct cat
+        h = self.sigmoid(self.in2hidden(combined))
+        y = self.sigmoid(self.in2output(h))
+        return y, h
 
     def init_hidden(self, bs):
         return torch.zeros(bs, self.hidden_size)
@@ -81,8 +85,14 @@ class ExGRU(nn.Module):
         super(ExGRU, self).__init__()
         self.hidden_size = hidden_size
         # GRU Cell weights
-        # self.something =
-        # etc ...
+        self.sigmoid = torch.sigmoid
+        self.tanh = torch.tanh
+
+        self.z_weights = nn.Linear(input_size + hidden_size, hidden_size)
+        self.r_weights = nn.Linear(input_size + hidden_size, hidden_size)
+        self.weights = nn.Linear(input_size + hidden_size, hidden_size)
+
+
 
     def name(self):
         return "GRU"
@@ -91,11 +101,15 @@ class ExGRU(nn.Module):
 
         # Implementation of GRU cell
 
-        # missing implementation
+        z = self.sigmoid(self.z_weights(torch.cat(hidden_state, x)))
+        r = self.sigmoid(self.r_weights(torch.cat(hidden_state, x)))
 
-        return output, hidden
+        h_bar = self.tanh(self.weights(torch.cat(r*hidden_state, x)))
+        h = (1-z)*hidden_state + z*h_bar
 
-    def init_hidden(self):
+        return h
+
+    def init_hidden(self, bs):
         return torch.zeros(bs, self.hidden_size)
 
 
@@ -124,7 +138,7 @@ class ExMLP(nn.Module):
         return x
 
 
-class ExLRestSelfAtten(nn.Module):
+class ExRestSelfAtten(nn.Module):
     def __init__(self, input_size, output_size, hidden_size):
         super(ExRestSelfAtten, self).__init__()
 
