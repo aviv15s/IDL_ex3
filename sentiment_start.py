@@ -16,17 +16,17 @@ import loader as ld
 
 batch_size = 32
 output_size = 2
-hidden_size = 64 # to experiment with
+hidden_size = 64  # to experiment with
 
 run_recurrent = True  # else run Token-wise MLP
-use_RNN = False  # otherwise GRU
+use_RNN = True  # otherwise GRU
 atten_size = 0  # atten > 0 means using restricted self atten
 
-reload_model = True
+reload_model = False
 num_epochs = 10
 learning_rate = 0.001
 test_interval = 50
-
+check_on_added_words = False # to check on the my_text_array in loader
 # Loading sataset, use toy = True for obtaining a smaller dataset
 
 train_dataset, test_dataset, num_words, input_size = ld.get_data_set(batch_size)
@@ -213,17 +213,17 @@ if reload_model:
     print("Reloading model")
     model.load_state_dict(torch.load(model.name() + ".pth"))
 
-added_words = True
-if added_words:
+
+if check_on_added_words :
     criterion = nn.CrossEntropyLoss()
-    from loader import my_text, my_test_texts, my_test_labels
+    from loader import my_text
+
     labels, reviews, reviews_text = my_text()
     hidden_state = model.init_hidden(int(labels.shape[0]))
     for i in range(num_words):
         output, hidden_state = model(reviews[:, i, :], hidden_state)  # HIDE
     loss = criterion(output, labels)
     print((torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float())
-
 
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -235,6 +235,9 @@ test_loss = 1.0
 train_accuracy, test_accuracy = [], []
 array_test_indexes = np.array([])
 train_accuracy_closest = []
+test_loss_list = []
+train_loss_list = []
+train_loss_closest = []
 counter = 0
 for epoch in range(num_epochs):
     itr = 0  # iteration counter within each epoch
@@ -279,6 +282,7 @@ for epoch in range(num_epochs):
         if test_iter:
             test_accuracy.append(
                 (torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float().sum() / batch_size)
+
         else:
             train_accuracy.append(
                 (torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float().sum() / batch_size)
@@ -292,11 +296,12 @@ for epoch in range(num_epochs):
 
         # averaged losses
         if test_iter:
-
             test_loss = 0.8 * float(loss.detach()) + 0.2 * test_loss
+            test_loss_list.append(test_loss)
+            train_loss_closest.append(train_loss_list[-1])
         else:
             train_loss = 0.9 * float(loss.detach()) + 0.1 * train_loss
-
+            train_loss_list.append(train_loss)
         if test_iter:
             print(
                 f"Epoch [{epoch + 1}/{num_epochs}], "
@@ -313,12 +318,43 @@ for epoch in range(num_epochs):
             # saving the model
             torch.save(model.state_dict(), model.name() + ".pth")
 
-print(len(train_accuracy), len(test_accuracy))
-plt.plot((array_test_indexes-1).tolist(),train_accuracy_closest,
-         label=f'train accuracy')
-plt.plot(array_test_indexes.tolist(), test_accuracy, label=f'test accuracy')
-plt.xlabel("# batch")
-plt.title(f"Train and Test accuracy per iteration")
-plt.grid(True)
-plt.legend()
+# print(len(train_accuracy), len(test_accuracy))
+# plt.plot((array_test_indexes - 1).tolist(), train_accuracy_closest,
+#          label=f'train accuracy')
+# plt.plot(array_test_indexes.tolist(), test_accuracy, label=f'test accuracy')
+# plt.xlabel("# batch")
+# plt.title(f"Train and Test accuracy per iteration")
+# plt.grid(True)
+# plt.legend()
+# plt.show()
+#
+# print(len(train_accuracy), len(test_accuracy))
+# plt.plot((array_test_indexes - 1).tolist(), train_accuracy_closest,
+#          label=f'train accuracy')
+# plt.plot(array_test_indexes.tolist(), test_accuracy, label=f'test accuracy')
+# plt.xlabel("# batch")
+# plt.title(f"Train and Test accuracy per iteration")
+# plt.grid(True)
+# plt.legend()
+# plt.show()
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+# Plot train and test accuracy on the first subplot
+ax1.plot((array_test_indexes - 1).tolist(), train_accuracy_closest, label='train accuracy')
+ax1.plot(array_test_indexes.tolist(), test_accuracy, label='test accuracy')
+ax1.set_xlabel("# batch")
+ax1.set_title("Train and Test accuracy per iteration")
+ax1.grid(True)
+ax1.legend()
+
+# Plot train and test loss on the second subplot
+ax2.plot((array_test_indexes - 1).tolist(), train_loss_closest, label='train loss')
+ax2.plot(array_test_indexes.tolist(), test_loss_list, label='test loss')
+ax2.set_xlabel("# batch")
+ax2.set_title("Train and Test loss per iteration")
+ax2.grid(True)
+ax2.legend()
+
+# Show the plots
+plt.tight_layout()
 plt.show()
