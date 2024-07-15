@@ -122,11 +122,9 @@ class ExMLP(nn.Module):
         self.layers = nn.Sequential(
             MatMul(input_size, round(0.7*input_size)),
             nn.ReLU(),
-            MatMul(round(0.7*input_size), round(0.2*input_size)),
+            MatMul(round(0.7*input_size), round(0.3*input_size)),
             nn.ReLU(),
-            MatMul(round(0.2 * input_size), round(output_size)),
-            # nn.ReLU(),
-            # MatMul(round(0.2 * input_size), output_size),
+            MatMul(round(0.3 * input_size), round(output_size)),
         )
 
     def name(self):
@@ -134,11 +132,7 @@ class ExMLP(nn.Module):
 
     def forward(self, x):
         # Token-wise MLP network implementation
-
         x = self.layers(x)
-
-        # rest
-
         return x
 
 
@@ -231,11 +225,20 @@ if check_on_added_words :
     from loader import my_text
 
     labels, reviews, reviews_text = my_text()
-    hidden_state = model.init_hidden(int(labels.shape[0]))
-    for i in range(num_words):
-        output, hidden_state = model(reviews[:, i, :], hidden_state)  # HIDE
+    if run_recurrent:
+        hidden_state = model.init_hidden(int(labels.shape[0]))
+        for i in range(num_words):
+            output, hidden_state = model(reviews[:, i, :], hidden_state)  # HIDE
+    else:
+        sub_score = model(reviews)
+        for r in range(len(reviews_text)):
+            for i in range(len(reviews_text[r])):
+                print(f"{reviews_text[r][i]} ({round(float(sub_score[r][i][0]),2)},{round(float(sub_score[r][i][1]),2)}), ", end="")
+            print()
+        output = torch.mean(sub_score, 1)
+
     loss = criterion(output, labels)
-    print((torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float())
+    print((torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).bool())
 
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -293,11 +296,11 @@ for epoch in range(num_epochs):
 
         if test_iter:
             test_accuracy.append(
-                (torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float().sum() / batch_size)
+                (torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float().sum() / output.shape[0])
 
         else:
             train_accuracy.append(
-                (torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float().sum() / batch_size)
+                (torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float().sum() / output.shape[0])
 
         # optimize in training iterations
 

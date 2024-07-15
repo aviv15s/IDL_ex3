@@ -76,11 +76,13 @@ def collact_batch(batch):
 ##########################
 
 my_test_texts = []
-my_test_texts.append(" this movie is very very bad ,the worst movie ")
-my_test_texts.append(" this movie is so great")
+my_test_texts.append(" this movie is very very bad ,the worst movie ")  # TN
+my_test_texts.append(" this movie is so great")  # TP
 my_test_texts.append(
-    "the movie is bad, although many will think that this is a good movie")
-my_test_labels = ["negative", "pos", "negative"]
+    "the movie is bad, although many will think that this is a good movie")  # FP
+my_test_texts.append(
+    "the movie is not the worst. it is in fact very good")  # FN
+my_test_labels = ["negative", "pos", "negative", "pos"]
 def my_text():
     label_list = []
     review_list = []
