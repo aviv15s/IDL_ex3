@@ -6,22 +6,21 @@
 ########################################################################
 ########################################################################
 
-import torch as tr
+import numpy as np
 import torch
+import torch.nn as nn
 from matplotlib import pyplot as plt
 from torch.nn.functional import pad
-import torch.nn as nn
-import numpy as np
-import loader as ld
 
+import loader as ld
 
 batch_size = 32
 output_size = 2
-hidden_size = 64        # to experiment with
+hidden_size = 64 # to experiment with
 
-run_recurrent = True    # else run Token-wise MLP
-use_RNN = True          # otherwise GRU
-atten_size = 0          # atten > 0 means using restricted self atten
+run_recurrent = True  # else run Token-wise MLP
+use_RNN = True  # otherwise GRU
+atten_size = 0  # atten > 0 means using restricted self atten
 
 reload_model = False
 num_epochs = 10
@@ -32,24 +31,27 @@ test_interval = 50
 
 train_dataset, test_dataset, num_words, input_size = ld.get_data_set(batch_size)
 
+
 # Special matrix multipication layer (like torch.Linear but can operate on arbitrary sized
 # tensors and considers its last two indices as the matrix.)
 
 class MatMul(nn.Module):
-    def __init__(self, in_channels, out_channels, use_bias = True):
+    def __init__(self, in_channels, out_channels, use_bias=True):
         super(MatMul, self).__init__()
-        self.matrix = torch.nn.Parameter(torch.nn.init.xavier_normal_(torch.empty(in_channels,out_channels)), requires_grad=True)
+        self.matrix = torch.nn.Parameter(torch.nn.init.xavier_normal_(torch.empty(in_channels, out_channels)),
+                                         requires_grad=True)
         if use_bias:
-            self.bias = torch.nn.Parameter(torch.zeros(1,1,out_channels), requires_grad=True)
+            self.bias = torch.nn.Parameter(torch.zeros(1, 1, out_channels), requires_grad=True)
 
         self.use_bias = use_bias
 
-    def forward(self, x):        
-        x = torch.matmul(x,self.matrix) 
+    def forward(self, x):
+        x = torch.matmul(x, self.matrix)
         if self.use_bias:
-            x = x+ self.bias 
+            x = x + self.bias
         return x
-        
+
+
 # Implements RNN Unit
 
 class ExRNN(nn.Module):
@@ -70,13 +72,14 @@ class ExRNN(nn.Module):
 
     def forward(self, x, hidden_state):
         # Implementation of RNN cell
-        combined = torch.cat((x, hidden_state),1)
+        combined = torch.cat((x, hidden_state), 1)
         h = self.sigmoid(self.in2hidden(combined))
         y = self.sigmoid(self.in2output(h))
         return y, h
 
     def init_hidden(self, bs):
         return torch.zeros(bs, self.hidden_size)
+
 
 # Implements GRU Unit
 
@@ -88,27 +91,25 @@ class ExGRU(nn.Module):
         self.sigmoid = torch.sigmoid
         self.tanh = torch.tanh
 
-        self.z_weights = nn.Linear(input_size + hidden_size, hidden_size)
-        self.r_weights = nn.Linear(input_size + hidden_size, hidden_size)
-        self.weights = nn.Linear(input_size + hidden_size, hidden_size)
-
-
+        self.z_weights = nn.Linear(hidden_size + input_size, hidden_size)
+        self.r_weights = nn.Linear(hidden_size + input_size, hidden_size)
+        self.weights = nn.Linear(hidden_size + input_size, hidden_size)
+        self.output_weights = nn.Linear(hidden_size, output_size)
 
     def name(self):
         return "GRU"
 
     def forward(self, x, hidden_state):
-
         # Implementation of GRU cell
-        combined = torch.cat((x, hidden_state),1)  # TODO check correct cat
+        combined = torch.cat((x, hidden_state), 1)  # TODO check correct cat
 
-        z = self.sigmoid(self.z_weights(torch.cat((hidden_state, x),1)))
-        r = self.sigmoid(self.r_weights(torch.cat((hidden_state, x),1)))
+        z = self.sigmoid(self.z_weights(torch.cat((hidden_state, x), 1)))
+        r = self.sigmoid(self.r_weights(torch.cat((hidden_state, x), 1)))
 
-        h_bar = self.tanh(self.weights(torch.cat((r*hidden_state, x),1)))
-        h = (1-z)*hidden_state + z*h_bar
-
-        return h
+        h_bar = self.tanh(self.weights(torch.cat((r * hidden_state, x), 1)))
+        h = (1 - z) * hidden_state + z * h_bar
+        output = self.output_weights(h)
+        return output, h
 
     def init_hidden(self, bs):
         return torch.zeros(bs, self.hidden_size)
@@ -121,17 +122,15 @@ class ExMLP(nn.Module):
         self.ReLU = torch.nn.ReLU()
 
         # Token-wise MLP network weights
-        self.layer1 = MatMul(input_size,hidden_size)
+        self.layer1 = MatMul(input_size, hidden_size)
         # additional layer(s)
-        
 
     def name(self):
         return "MLP"
 
     def forward(self, x):
-
         # Token-wise MLP network implementation
-        
+
         x = self.layer1(x)
         x = self.ReLU(x)
         # rest
@@ -148,19 +147,17 @@ class ExRestSelfAtten(nn.Module):
         self.sqrt_hidden_size = np.sqrt(float(hidden_size))
         self.ReLU = torch.nn.ReLU()
         self.softmax = torch.nn.Softmax(2)
-        
+
         # Token-wise MLP + Restricted Attention network implementation
 
-        self.layer1 = MatMul(input_size,hidden_size)
+        self.layer1 = MatMul(input_size, hidden_size)
         self.W_q = MatMul(hidden_size, hidden_size, use_bias=False)
         # rest ...
-
 
     def name(self):
         return "MLP_atten"
 
     def forward(self, x):
-
         # Token-wise MLP + Restricted Attention network implementation
 
         x = self.layer1(x)
@@ -169,15 +166,15 @@ class ExRestSelfAtten(nn.Module):
         # generating x in offsets between -atten_size and atten_size 
         # with zero padding at the ends
 
-        padded = pad(x,(0,0,atten_size,atten_size,0,0))
+        padded = pad(x, (0, 0, atten_size, atten_size, 0, 0))
 
         x_nei = []
-        for k in range(-atten_size,atten_size+1):
+        for k in range(-atten_size, atten_size + 1):
             x_nei.append(torch.roll(padded, k, 1))
 
-        x_nei = torch.stack(x_nei,2)
-        x_nei = x_nei[:,atten_size:-atten_size,:]
-        
+        x_nei = torch.stack(x_nei, 2)
+        x_nei = x_nei[:, atten_size:-atten_size, :]
+
         # x_nei has an additional axis that corresponds to the offset
 
         # Applying attention layer
@@ -185,7 +182,6 @@ class ExRestSelfAtten(nn.Module):
         # query = ...
         # keys = ...
         # vals = ...
-
 
         return x, atten_weights
 
@@ -196,6 +192,7 @@ class ExRestSelfAtten(nn.Module):
 def print_review(rev_text, sbs1, sbs2, lbl1, lbl2):
     pass
     # implement
+
 
 # select model to use
 
@@ -224,17 +221,21 @@ test_loss = 1.0
 
 # training steps in which a test step is executed every test_interval
 train_accuracy, test_accuracy = [], []
-
+array_test_indexes = np.array([])
+train_accuracy_closest = []
+counter = 0
 for epoch in range(num_epochs):
     itr = 0  # iteration counter within each epoch
 
-    for labels, reviews, reviews_text in train_dataset:   # getting training batches
-
+    for labels, reviews, reviews_text in train_dataset:  # getting training batches
+        counter += 1
         itr = itr + 1
 
         if (itr + 1) % test_interval == 0:
+            array_test_indexes = np.append(array_test_indexes, counter)
+            train_accuracy_closest.append(train_accuracy[-1])
             test_iter = True
-            labels, reviews, reviews_text = next(iter(test_dataset)) # get a test batch 
+            labels, reviews, reviews_text = next(iter(test_dataset))  # get a test batch
         else:
             test_iter = False
 
@@ -244,29 +245,31 @@ for epoch in range(num_epochs):
             hidden_state = model.init_hidden(int(labels.shape[0]))
 
             for i in range(num_words):
-                output, hidden_state = model(reviews[:,i,:], hidden_state)  # HIDE
+                output, hidden_state = model(reviews[:, i, :], hidden_state)  # HIDE
 
-        else:  
+        else:
 
-        # Token-wise networks (MLP / MLP + Atten.) 
-        
+            # Token-wise networks (MLP / MLP + Atten.)
+
             sub_score = []
-            if atten_size > 0:  
+            if atten_size > 0:
                 # MLP + atten
                 sub_score, atten_weights = model(reviews)
-            else:               
+            else:
                 # MLP
                 sub_score = model(reviews)
 
             output = torch.mean(sub_score, 1)
-            
+
         # cross-entropy loss
         loss = criterion(output, labels)
 
         if test_iter:
-            test_accuracy.append((torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float().sum() / batch_size)
+            test_accuracy.append(
+                (torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float().sum() / batch_size)
         else:
-            train_accuracy.append((torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float().sum() / batch_size)
+            train_accuracy.append(
+                (torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float().sum() / batch_size)
 
         # optimize in training iterations
 
@@ -277,6 +280,7 @@ for epoch in range(num_epochs):
 
         # averaged losses
         if test_iter:
+
             test_loss = 0.8 * float(loss.detach()) + 0.2 * test_loss
         else:
             train_loss = 0.9 * float(loss.detach()) + 0.1 * train_loss
@@ -292,16 +296,16 @@ for epoch in range(num_epochs):
             if not run_recurrent:
                 nump_subs = sub_score.detach().numpy()
                 labels = labels.detach().numpy()
-                print_review(reviews_text[0], nump_subs[0,:,0], nump_subs[0,:,1], labels[0,0], labels[0,1])
+                print_review(reviews_text[0], nump_subs[0, :, 0], nump_subs[0, :, 1], labels[0, 0], labels[0, 1])
 
             # saving the model
-            torch.save(model, model.name() + ".pth")
-
+            torch.save(model.state_dict(), model.name() + ".pth")
 
 print(len(train_accuracy), len(test_accuracy))
-plt.plot(list(np.linspace(0, num_epochs, len(train_accuracy))), train_accuracy, label=f'train accuracy')
-plt.plot(list(np.linspace(0, num_epochs, len(test_accuracy))), test_accuracy, label=f'test accuracy')
-plt.xlabel("# epochs")
+plt.plot((array_test_indexes-1).tolist(),train_accuracy_closest,
+         label=f'train accuracy')
+plt.plot(array_test_indexes.tolist(), test_accuracy, label=f'test accuracy')
+plt.xlabel("# batch")
 plt.title(f"Train and Test accuracy per iteration")
 plt.grid(True)
 plt.legend()
