@@ -19,10 +19,10 @@ output_size = 2
 hidden_size = 64 # to experiment with
 
 run_recurrent = True  # else run Token-wise MLP
-use_RNN = True  # otherwise GRU
+use_RNN = False  # otherwise GRU
 atten_size = 0  # atten > 0 means using restricted self atten
 
-reload_model = False
+reload_model = True
 num_epochs = 10
 learning_rate = 0.001
 test_interval = 50
@@ -212,6 +212,18 @@ print("Using model: " + model.name())
 if reload_model:
     print("Reloading model")
     model.load_state_dict(torch.load(model.name() + ".pth"))
+
+added_words = True
+if added_words:
+    criterion = nn.CrossEntropyLoss()
+    from loader import my_text, my_test_texts, my_test_labels
+    labels, reviews, reviews_text = my_text()
+    hidden_state = model.init_hidden(int(labels.shape[0]))
+    for i in range(num_words):
+        output, hidden_state = model(reviews[:, i, :], hidden_state)  # HIDE
+    loss = criterion(output, labels)
+    print((torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).float())
+
 
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)

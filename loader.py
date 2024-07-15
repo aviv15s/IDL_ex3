@@ -79,10 +79,23 @@ my_test_texts = []
 my_test_texts.append(" this movie is very very bad ,the worst movie ")
 my_test_texts.append(" this movie is so great")
 my_test_texts.append(
-    "This is the best movie I watched, however there are some flaws in animation and in the translation, "
-    "the actors were a little overacting and the director has a long way to go")
-my_test_labels = ["neg", "pos", "pos"]
-
+    "the movie is bad, although many will think that this is a good movie")
+my_test_labels = ["negative", "pos", "negative"]
+def my_text():
+    label_list = []
+    review_list = []
+    embadding_list = []
+    for i, review in enumerate(my_test_texts):
+        label_list.append(preprocess_label(my_test_labels[i]))  ### label
+        review_list.append(tokinize(review))  ### the  actuall review
+        processed_review = preprocess_review(review).detach()
+        embadding_list.append(processed_review)  ### the embedding vectors
+    label_list = torch.tensor(label_list, dtype=torch.float32).reshape((-1, 2))
+    embadding_tensor = torch.cat(embadding_list)
+    return label_list.to(device), embadding_tensor.to(device), review_list
+    # review_list.append(ld.preprocess_review(my_test_texts[-1]).detach())  ### label
+    # label_list.append(ld.preprocess_label(my_test_labels[-1]))
+    # hidden_state = model.init_hidden(len(label_list[0]))
 
 ##########################
 ##########################
