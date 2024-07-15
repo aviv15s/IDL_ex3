@@ -16,11 +16,11 @@ import loader as ld
 
 batch_size = 32
 output_size = 2
-hidden_size = 64  # to experiment with
+hidden_size = 64 # to experiment with
 
-run_recurrent = True  # else run Token-wise MLP
-use_RNN = True  # otherwise GRU
-atten_size = 0  # atten > 0 means using restricted self atten
+run_recurrent = False    # else run Token-wise MLP
+use_RNN = True          # otherwise GRU
+atten_size = 0          # atten > 0 means using restricted self atten
 
 reload_model = False
 num_epochs = 10
@@ -119,11 +119,15 @@ class ExMLP(nn.Module):
     def __init__(self, input_size, output_size, hidden_size):
         super(ExMLP, self).__init__()
 
-        self.ReLU = torch.nn.ReLU()
-
-        # Token-wise MLP network weights
-        self.layer1 = MatMul(input_size, hidden_size)
-        # additional layer(s)
+        self.layers = nn.Sequential(
+            MatMul(input_size, round(0.7*input_size)),
+            nn.ReLU(),
+            MatMul(round(0.7*input_size), round(0.2*input_size)),
+            nn.ReLU(),
+            MatMul(round(0.2 * input_size), round(output_size)),
+            # nn.ReLU(),
+            # MatMul(round(0.2 * input_size), output_size),
+        )
 
     def name(self):
         return "MLP"
@@ -131,8 +135,8 @@ class ExMLP(nn.Module):
     def forward(self, x):
         # Token-wise MLP network implementation
 
-        x = self.layer1(x)
-        x = self.ReLU(x)
+        x = self.layers(x)
+
         # rest
 
         return x
@@ -153,6 +157,7 @@ class ExRestSelfAtten(nn.Module):
         self.layer1 = MatMul(input_size, hidden_size)
         self.W_q = MatMul(hidden_size, hidden_size, use_bias=False)
         # rest ...
+        # self.W_k = MatMul(hidden_size, hidden_size, use_bias=False)
 
     def name(self):
         return "MLP_atten"
@@ -183,6 +188,7 @@ class ExRestSelfAtten(nn.Module):
         # keys = ...
         # vals = ...
 
+
         return x, atten_weights
 
 
@@ -190,8 +196,14 @@ class ExRestSelfAtten(nn.Module):
 # prints also the final scores, the softmaxed prediction values and the true label values
 
 def print_review(rev_text, sbs1, sbs2, lbl1, lbl2):
-    pass
-    # implement
+    for i in range(len(rev_text)):
+        print(f"{rev_text[i]} ({round(float(sbs1[i]),2)}, {round(float(sbs2[i]),2)})", end=", ")
+    print()
+    sbs1_avg, sbs2_avg = np.mean(sbs1), np.mean(sbs2)
+    predictions = torch.softmax(torch.tensor([sbs1_avg, sbs2_avg]), dim=0)
+    print(f"Prediction Label: ({round(predictions[0].item(),2)},{round(predictions[1].item(),2)})\n"
+          f"Real Label: ({lbl1},{lbl2})")
+    print()
 
 
 # select model to use
