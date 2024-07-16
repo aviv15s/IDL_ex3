@@ -16,11 +16,11 @@ import loader as ld
 
 batch_size = 32
 output_size = 2
-hidden_size = 64 # to experiment with
+hidden_size = 64  # to experiment with
 
-run_recurrent = False    # else run Token-wise MLP
-use_RNN = True          # otherwise GRU
-atten_size = 2         # atten > 0 means using restricted self atten
+run_recurrent = False  # else run Token-wise MLP
+use_RNN = True  # otherwise GRU
+atten_size = 5  # atten > 0 means using restricted self atten
 
 reload_model = False
 num_epochs = 10
@@ -120,9 +120,9 @@ class ExMLP(nn.Module):
         super(ExMLP, self).__init__()
 
         self.layers = nn.Sequential(
-            MatMul(input_size, round(0.7*input_size)),
+            MatMul(input_size, round(0.7 * input_size)),
             nn.ReLU(),
-            MatMul(round(0.7*input_size), round(0.3*input_size)),
+            MatMul(round(0.7 * input_size), round(0.3 * input_size)),
             nn.ReLU(),
             MatMul(round(0.3 * input_size), round(output_size)),
         )
@@ -149,20 +149,20 @@ class ExRestSelfAtten(nn.Module):
         # Token-wise MLP + Restricted Attention network implementation
 
         self.layer1 = MatMul(input_size, hidden_size)
-        self.W_q = MatMul(hidden_size, hidden_size, use_bias=False)
-        # rest ...
-        self.W_k = MatMul(hidden_size, hidden_size, use_bias=False)
-        self.W_v = MatMul(hidden_size, hidden_size, use_bias=False)
 
+        self.W_q = MatMul(input_size, hidden_size, use_bias=False)
+        self.W_k = MatMul(input_size, hidden_size, use_bias=False)
+        self.W_v = MatMul(input_size, input_size, use_bias=False)
 
+        self.mlp = ExMLP(input_size, output_size, hidden_size)
     def name(self):
         return "MLP_atten"
 
     def forward(self, x):
         # Token-wise MLP + Restricted Attention network implementation
 
-        x = self.layer1(x)
-        x = self.ReLU(x)
+        # positional encoding
+
 
         # generating x in offsets between -atten_size and atten_size 
         # with zero padding at the ends
@@ -180,9 +180,15 @@ class ExRestSelfAtten(nn.Module):
 
         # Applying attention layer
 
-        # query = ...
-        # keys = ...
-        # vals = ...
+        query = self.W_q(x_nei)
+        keys = self.W_k(x_nei)
+        vals = self.W_v(x_nei)
+
+        d = (query * keys).sum(dim=3) / self.sqrt_hidden_size  # 32x100x5
+        atten_weights = torch.softmax(d, dim=2)  #32x100x5
+        v = (atten_weights.unsqueeze(dim=3).repeat(1,1,1,input_size) * vals).sum(dim=2)
+
+        x = self.mlp.forward(v)
 
         return x, atten_weights
 
@@ -192,11 +198,11 @@ class ExRestSelfAtten(nn.Module):
 
 def print_review(rev_text, sbs1, sbs2, lbl1, lbl2):
     for i in range(len(rev_text)):
-        print(f"{rev_text[i]} ({round(float(sbs1[i]),2)}, {round(float(sbs2[i]),2)})", end=", ")
+        print(f"{rev_text[i]} ({round(float(sbs1[i]), 2)}, {round(float(sbs2[i]), 2)})", end=", ")
     print()
     sbs1_avg, sbs2_avg = np.mean(sbs1), np.mean(sbs2)
     predictions = torch.softmax(torch.tensor([sbs1_avg, sbs2_avg]), dim=0)
-    print(f"Prediction Label: ({round(predictions[0].item(),2)},{round(predictions[1].item(),2)})\n"
+    print(f"Prediction Label: ({round(predictions[0].item(), 2)},{round(predictions[1].item(), 2)})\n"
           f"Real Label: ({lbl1},{lbl2})")
     print()
 
@@ -220,8 +226,7 @@ if reload_model:
     print("Reloading model")
     model.load_state_dict(torch.load(model.name() + ".pth"))
 
-
-if check_on_added_words :
+if check_on_added_words:
     criterion = nn.CrossEntropyLoss()
     from loader import my_text
 
@@ -234,7 +239,9 @@ if check_on_added_words :
         sub_score = model(reviews)
         for r in range(len(reviews_text)):
             for i in range(len(reviews_text[r])):
-                print(f"{reviews_text[r][i]} ({round(float(sub_score[r][i][0]),2)},{round(float(sub_score[r][i][1]),2)}), ", end="")
+                print(
+                    f"{reviews_text[r][i]} ({round(float(sub_score[r][i][0]), 2)},{round(float(sub_score[r][i][1]), 2)}), ",
+                    end="")
             print()
         output = torch.mean(sub_score, 1)
 
