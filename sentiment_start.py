@@ -9,6 +9,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import math
 from matplotlib import pyplot as plt
 from torch.nn.functional import pad
 
@@ -26,7 +27,7 @@ reload_model = False
 num_epochs = 10
 learning_rate = 0.001
 test_interval = 50
-check_on_added_words = False # to check on the my_text_array in loader
+check_on_added_words = False  # to check on the my_text_array in loader
 # Loading sataset, use toy = True for obtaining a smaller dataset
 
 train_dataset, test_dataset, num_words, input_size = ld.get_data_set(batch_size)
@@ -155,14 +156,17 @@ class ExRestSelfAtten(nn.Module):
         self.W_v = MatMul(input_size, input_size, use_bias=False)
 
         self.mlp = ExMLP(input_size, output_size, hidden_size)
+
     def name(self):
         return "MLP_atten"
 
     def forward(self, x):
-        # Token-wise MLP + Restricted Attention network implementation
-
         # positional encoding
-
+        d_model = x.shape[2]
+        position = torch.arange(x.shape[1]).unsqueeze(1)
+        div_term = torch.exp(-math.log(10000.0) ** (torch.arange(0, d_model, 2) / d_model))
+        x[:, :, 0::2] += torch.sin(position * div_term)
+        x[:, :, 1::2] += torch.cos(position * div_term)
 
         # generating x in offsets between -atten_size and atten_size 
         # with zero padding at the ends
@@ -185,8 +189,8 @@ class ExRestSelfAtten(nn.Module):
         vals = self.W_v(x_nei)
 
         d = (query * keys).sum(dim=3) / self.sqrt_hidden_size  # 32x100x5
-        atten_weights = torch.softmax(d, dim=2)  #32x100x5
-        v = (atten_weights.unsqueeze(dim=3).repeat(1,1,1,input_size) * vals).sum(dim=2)
+        atten_weights = torch.softmax(d, dim=2)  # 32x100x5
+        v = (atten_weights.unsqueeze(dim=3).repeat(1, 1, 1, input_size) * vals).sum(dim=2)
 
         x = self.mlp.forward(v)
 
