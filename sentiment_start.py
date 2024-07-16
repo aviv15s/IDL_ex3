@@ -20,7 +20,7 @@ hidden_size = 64 # to experiment with
 
 run_recurrent = False    # else run Token-wise MLP
 use_RNN = True          # otherwise GRU
-atten_size = 0          # atten > 0 means using restricted self atten
+atten_size = 2         # atten > 0 means using restricted self atten
 
 reload_model = False
 num_epochs = 10
@@ -151,7 +151,9 @@ class ExRestSelfAtten(nn.Module):
         self.layer1 = MatMul(input_size, hidden_size)
         self.W_q = MatMul(hidden_size, hidden_size, use_bias=False)
         # rest ...
-        # self.W_k = MatMul(hidden_size, hidden_size, use_bias=False)
+        self.W_k = MatMul(hidden_size, hidden_size, use_bias=False)
+        self.W_v = MatMul(hidden_size, hidden_size, use_bias=False)
+
 
     def name(self):
         return "MLP_atten"
