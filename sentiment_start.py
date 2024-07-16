@@ -16,10 +16,10 @@ import loader as ld
 
 batch_size = 32
 output_size = 2
-hidden_size = 64  # to experiment with
+hidden_size = 128  # to experiment with
 
 run_recurrent = True  # else run Token-wise MLP
-use_RNN = True  # otherwise GRU
+use_RNN = False  # otherwise GRU
 atten_size = 0  # atten > 0 means using restricted self atten
 
 reload_model = False
