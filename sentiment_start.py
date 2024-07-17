@@ -21,12 +21,12 @@ hidden_size = 64  # to experiment with
 
 run_recurrent = False  # else run Token-wise MLP
 use_RNN = True  # otherwise GRU
-atten_size = 5  # atten > 0 means using restricted self atten
+atten_size = 5 # atten > 0 means using restricted self atten
 
 reload_model = False
 num_epochs = 10
 learning_rate = 0.001
-test_interval = 50
+test_interval = 25
 check_on_added_words = False  # to check on the my_text_array in loader
 # Loading sataset, use toy = True for obtaining a smaller dataset
 
@@ -230,7 +230,7 @@ if reload_model:
     print("Reloading model")
     model.load_state_dict(torch.load(model.name() + ".pth"))
 
-if check_on_added_words:
+if check_on_added_words and reload_model:
     criterion = nn.CrossEntropyLoss()
     from loader import my_text
 
@@ -239,17 +239,23 @@ if check_on_added_words:
         hidden_state = model.init_hidden(int(labels.shape[0]))
         for i in range(num_words):
             output, hidden_state = model(reviews[:, i, :], hidden_state)  # HIDE
+    elif(atten_size>0):
+        sub_score, atten_weights = model(reviews)
+        output = torch.mean(sub_score, 1)
+        loss = criterion(output, labels)
     else:
         sub_score = model(reviews)
         for r in range(len(reviews_text)):
             for i in range(len(reviews_text[r])):
                 print(
-                    f"{reviews_text[r][i]} ({round(float(sub_score[r][i][0]), 2)},{round(float(sub_score[r][i][1]), 2)}), ",
+                    f"{reviews_text[r][i]} ({round(float(sub_score[r][i][0]), 2)},{round(float(sub_score[r][i][1]), 2)}),",
                     end="")
             print()
         output = torch.mean(sub_score, 1)
 
     loss = criterion(output, labels)
+    output = torch.softmax(output,dim=1)
+    print(f"Model result: {(torch.max(output, dim=1))}\n Expected value: {(torch.max(labels, dim=1))}\n")
     print((torch.argmax(output, dim=1) == torch.argmax(labels, dim=1)).bool())
 
 criterion = nn.CrossEntropyLoss()
@@ -345,25 +351,6 @@ for epoch in range(num_epochs):
             # saving the model
             torch.save(model.state_dict(), model.name() + ".pth")
 
-# print(len(train_accuracy), len(test_accuracy))
-# plt.plot((array_test_indexes - 1).tolist(), train_accuracy_closest,
-#          label=f'train accuracy')
-# plt.plot(array_test_indexes.tolist(), test_accuracy, label=f'test accuracy')
-# plt.xlabel("# batch")
-# plt.title(f"Train and Test accuracy per iteration")
-# plt.grid(True)
-# plt.legend()
-# plt.show()
-#
-# print(len(train_accuracy), len(test_accuracy))
-# plt.plot((array_test_indexes - 1).tolist(), train_accuracy_closest,
-#          label=f'train accuracy')
-# plt.plot(array_test_indexes.tolist(), test_accuracy, label=f'test accuracy')
-# plt.xlabel("# batch")
-# plt.title(f"Train and Test accuracy per iteration")
-# plt.grid(True)
-# plt.legend()
-# plt.show()
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
 # Plot train and test accuracy on the first subplot

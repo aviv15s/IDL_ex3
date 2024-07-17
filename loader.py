@@ -82,7 +82,11 @@ my_test_texts.append(
     "the movie is bad, although many will think that this is a good movie")  # FP
 my_test_texts.append(
     "the movie is not the worst. it is in fact very good")  # FN
-my_test_labels = ["negative", "pos", "negative", "pos"]
+# my_test_texts.append(
+#     "it is surprisingly not that awful it is still bad")  # mlp fail and mlp attention
+my_test_texts.append(
+    "it is written amazingly bad")  # mlp fail and mlp attention
+my_test_labels = ["negative", "pos", "negative", "pos","negative"]
 def my_text():
     label_list = []
     review_list = []
